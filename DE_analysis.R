@@ -2,27 +2,32 @@
 setwd("~/projects/immune_scRNA_TaoLab/analysis/")
 # load("afterAnno.RData")
 mouse = readRDS("refinedAnno_SeuratObj.RDS")
+mouse$condition = ifelse(mouse$treatment=="HFD","MOCK","4HPAA")
 
-as.data.frame(prop.table(table(mouse$cell_class,mouse$treatment),margin = 2)) %>% ggplot(aes(x=Var2,y=Freq*100,fill = Var1))+
+### 
+as.data.frame(prop.table(table(mouse$cell_class,mouse$condition),margin = 2)) %>% ggplot(aes(x=Var2,y=Freq*100,fill = Var1))+
   geom_col()+paletteer::scale_fill_paletteer_d("ggthemes::Miller_Stone")+theme_bw()+ggtitle("Cell proportion")+
-  xlab("treatment")+ylab("Cell proportion")+labs(fill = "cell_class")+guides(fill = guide_legend(ncol = 1,override.aes = list(size = 3)))+
+  xlab("condition")+ylab("Cell proportion")+labs(fill = "cell_class")+guides(fill = guide_legend(ncol = 1,override.aes = list(size = 3)))+
   theme(legend.title = element_text(size=13),plot.title = element_text(face = "bold",hjust = 0.5,size = 16))
 
 
-Idents(mouse) = mouse$treatment
+Idents(mouse) = mouse$condition
 DEG_cellTypes_wilcoxon = Reduce(bind_rows,sapply(unique(mouse$cell_type_refine), function(ct){
   print(ct)
-  out = FindMarkers(subset(mouse,cell_type_refine == ct),ident.1 = "4HPAA",ident.2 = "HFD")
+  out = FindMarkers(subset(mouse,cell_type_refine == ct),ident.1 = "4HPAA",ident.2 = "MOCK")
   out = data.frame(cell_type = ct,gene=rownames(out),out,change = ifelse(out$p_val_adj < 0.05,ifelse(out$avg_log2FC>0,"Up","Down"),"Stable"))
   return(out)
 },simplify = F))
 
 DEG_cellClass_wilcoxon = Reduce(bind_rows,sapply(unique(mouse$cell_class), function(ct){
   print(ct)
-  out = FindMarkers(subset(mouse,cell_class == ct),ident.1 = "4HPAA",ident.2 = "HFD")
+  out = FindMarkers(subset(mouse,cell_class == ct),ident.1 = "4HPAA",ident.2 = "MOCK")
   out = data.frame(cell_type = ct,gene=rownames(out),out,change = ifelse(out$p_val_adj < 0.05,ifelse(out$avg_log2FC>0,"Up","Down"),"Stable"))
   return(out)
 },simplify = F))
+
+# diff gene number
+table(DEG_cellTypes_wilcoxon$cell_type,DEG_cellTypes_wilcoxon$change)
 
 # volcano
 ### cell types
@@ -42,12 +47,12 @@ write.csv(DEG_cellTypes_wilcoxon,"DEG_subtypes.csv",quote = F,row.names = F)
 save.image("DEG.RData")
 
 ### heatmap
-mouse$class_treat = paste(mouse$cell_class,mouse$treatment,sep = "_")
-mouse$type_treat = paste(mouse$cell_type_refine,mouse$treatment,sep = "_")
+mouse$class_treat = paste(mouse$cell_class,mouse$condition,sep = "_")
+mouse$type_treat = paste(mouse$cell_type_refine,mouse$condition,sep = "_")
 
-pb_classTreat = AverageExpression(mouse,group.by = c("cell_class","treatment")) %>% as.data.frame
-pb_typeTreat = AverageExpression(mouse,group.by = c("cell_type_refine","treatment")) %>% as.data.frame
-colnames(pb_typeTreat) = (table(mouse$cell_type_refine,mouse$treatment) %>% as.data.frame() %>% 
+pb_classTreat = AverageExpression(mouse,group.by = c("cell_class","condition")) %>% as.data.frame
+pb_typeTreat = AverageExpression(mouse,group.by = c("cell_type_refine","condition")) %>% as.data.frame
+colnames(pb_typeTreat) = (table(mouse$cell_type_refine,mouse$condition) %>% as.data.frame() %>% 
                             arrange(factor(Var1,levels = levels(mouse$cell_type_refine))) %>% mutate(name=paste(Var1,Var2,sep="_")))$name
 colnames(pb_classTreat) = gsub("RNA.","",colnames(pb_classTreat))
 
@@ -59,6 +64,18 @@ type_heatmap = sapply(unique(DEG_cellTypes_wilcoxon$cell_type), function(ct){
     }
 },simplify = F)
 names(type_heatmap) = unique(DEG_cellTypes_wilcoxon$cell_type)
+
+dir.create("heatmap/withRibo",recursive = T)
+sapply(names(type_heatmap),function(ct){
+  if(!grepl("Low|Doublet",ct) && !is.null(type_heatmap[[ct]])){
+    print(ct)
+    cairo_pdf(width = 8, height = (nrow(filter(DEG_cellTypes_wilcoxon,cell_type == ct & change!="Stable"))/10)+2,
+              file = paste0("heatmap/withRibo/",ct,".pdf"))
+    print(type_heatmap[[ct]]+ggtitle(ct))
+    dev.off()
+  }
+})
+qpdf::pdf_combine(list.files("heatmap/withRibo/",full.names = T),output = "heatmap/DEGheatmap_withRibo.pdf")
 
 
 ### pseudobulk heatmap,cell subtype

@@ -1,6 +1,8 @@
 rm(list = ls());gc()
 setwd("~/projects/immune_scRNA_TaoLab/analysis/")
 mouse = readRDS("afterAnnp_SeuratObj.RDS")
+mouse$condition = ifelse(mouse$treatment=="HFD","MOCK","4HPAA")
+
 
 Idents(mouse) = mouse$RNA_snn_res.1
 mouse$cell_type = as.character(mouse$cell_type)
@@ -200,9 +202,9 @@ ggarrange(DimPlot(mouse,group.by = "cell_type_refine",label = T,repel = T,cols =
 
 
 ## Cell composition bar
-as.data.frame(prop.table(table(mouse$cell_type_refine,mouse$treatment),margin = 2)) %>% ggplot(aes(x=Var2,y=Freq*100,fill = Var1))+
+as.data.frame(prop.table(table(mouse$cell_type_refine,mouse$condition),margin = 2)) %>% ggplot(aes(x=Var2,y=Freq*100,fill = Var1))+
   geom_col()+paletteer::scale_fill_paletteer_d("ggsci::default_igv")+theme_bw()+ggtitle("Cell proportion")+
-  xlab("treatment")+ylab("Cell proportion")+labs(fill = "cell_type")+guides(fill = guide_legend(ncol = 1,override.aes = list(size = 3)))+
+  xlab("condition")+ylab("Cell proportion")+labs(fill = "cell_type")+guides(fill = guide_legend(ncol = 1,override.aes = list(size = 3)))+
   theme(legend.title = element_text(size=13),plot.title = element_text(face = "bold",hjust = 0.5,size = 16))
 ggarrange(DimPlot(mouse,group.by = "cell_type_refine",label = T,repel = T,cols = paletteer::paletteer_d("ggsci::default_igv"))+
             NoLegend(),
@@ -213,6 +215,7 @@ ggarrange(DimPlot(mouse,group.by = "cell_type_refine",label = T,repel = T,cols =
                                "Fabp4","Col1a2","nCount_RNA","percent_mt"),fill.by = "ident")+
             scale_fill_paletteer_d("ggsci::default_igv")+NoLegend()+ggtitle("Marker gene expression"),
           ncol = 2)
+DimPlot(mouse,group.by = "cell_type_refine",label = T,repel = T,cols = paletteer::paletteer_d("ggsci::default_igv"),split.by = "condition")
 
 save.image("detailly_anno.RData")
 saveRDS(mouse,file = "refinedAnno_SeuratObj.RDS")

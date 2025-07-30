@@ -9,7 +9,7 @@ mouse2 = CreateSeuratObject(counts = Read10X("~/projects/immune_scRNA_TaoLab/dat
 mouse=merge(mouse1,mouse2)
 
 mouse$treatment = mouse$orig.ident
-mouse$condition = ifelse(mouse$treatment=="HFD","control","treat")
+mouse$condition = ifelse(mouse$treatment=="HFD","MOCK","4HPAA")
 
 VlnPlot(mouse,group.by = "treatment",features = c("nFeature_RNA","nCount_RNA"))
 
@@ -18,6 +18,9 @@ mouse$percent_mt = PercentageFeatureSet(mouse,"^mt-")
 VlnPlot(mouse,"percent_mt")
 mouse[["percent_ribo"]]<-PercentageFeatureSet(mouse, "^Rp[sl]")
 mouse[["percent_hb"]]<-PercentageFeatureSet(mouse, "^Hb[^(p)]-")
+# ribo-gene exp
+VlnPlot(mouse,group.by = "cell_type_refine",features = rownames(mouse)[grep("^Rp[sl]",rownames(mouse))],
+        split.by = "condition",split.plot = T,stack = T,flip = T)+ggtitle("Ribo-gene expression")
 
 # feature scatter
 FeatureScatter(mouse,feature1 = "nCount_RNA",feature2 = "percent_mt",group.by = "treatment")+

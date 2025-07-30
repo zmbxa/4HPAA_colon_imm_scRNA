@@ -2,18 +2,20 @@
 setwd("~/projects/immune_scRNA_TaoLab/analysis/")
 # mouse=readRDS("refinedAnno_SeuratObj.RDS")
 load("DE_enrich_excludeRiboGenes.RData")
+mouse$condition = ifelse(mouse$treatment=="HFD","MOCK","4HPAA")
 
+Idents(mouse) = mouse$condition
 ## DEG list, exclude ribo- genes
 DEG_cellTypes_wilcoxon = Reduce(bind_rows,sapply(unique(mouse$cell_type_refine), function(ct){
   print(ct)
-  out = FindMarkers(subset(mouse,cell_type_refine == ct),ident.1 = "4HPAA",ident.2 = "HFD",features =rownames(mouse)[-grep("^Rp[sl]",rownames(mouse))])
+  out = FindMarkers(subset(mouse,cell_type_refine == ct),ident.1 = "4HPAA",ident.2 = "MOCK",features =rownames(mouse)[-grep("^Rp[sl]",rownames(mouse))])
   out = data.frame(cell_type = ct,gene=rownames(out),out,change = ifelse(out$p_val_adj < 0.05,ifelse(out$avg_log2FC>0,"Up","Down"),"Stable"))
   return(out)
 },simplify = F))
 
 DEG_cellClass_wilcoxon = Reduce(bind_rows,sapply(unique(mouse$cell_class), function(ct){
   print(ct)
-  out = FindMarkers(subset(mouse,cell_class == ct),ident.1 = "4HPAA",ident.2 = "HFD",features = rownames(mouse)[-grep("^Rp[sl]",rownames(mouse))])
+  out = FindMarkers(subset(mouse,cell_class == ct),ident.1 = "4HPAA",ident.2 = "MOCK",features = rownames(mouse)[-grep("^Rp[sl]",rownames(mouse))])
   out = data.frame(cell_type = ct,gene=rownames(out),out,change = ifelse(out$p_val_adj < 0.05,ifelse(out$avg_log2FC>0,"Up","Down"),"Stable"))
   return(out)
 },simplify = F))
@@ -34,10 +36,24 @@ type_heatmap = sapply(unique(DEG_cellTypes_wilcoxon$cell_type), function(ct){
   if(nrow(filter(DEG_cellTypes_wilcoxon,cell_type == ct &change!="Stable")) > 0){
     print(ct)
     return(DoHeatmap(subset(mouse,cell_type_refine == ct),features = filter(DEG_cellTypes_wilcoxon,cell_type == ct &change!="Stable")$gene,
-                     group.by = "type_treat",size=4))
+                     group.by = "type_treat",size=4, group.bar.height = 0.006))
   }
 },simplify = F)
 names(type_heatmap) = unique(DEG_cellTypes_wilcoxon$cell_type)
+
+dir.create("heatmap/excludeRibo",recursive = T)
+sapply(names(type_heatmap),function(ct){
+  if(!grepl("Low|Doublet",ct) && !is.null(type_heatmap[[ct]])){
+    print(ct)
+    cairo_pdf(width = 8, height = (nrow(filter(DEG_cellTypes_wilcoxon,cell_type == ct & change!="Stable"))/10)+2,
+              file = paste0("heatmap/excludeRibo/",ct,".pdf"))
+    print(type_heatmap[[ct]]+ggtitle(ct))
+    dev.off()
+  }
+})
+qpdf::pdf_combine(list.files("heatmap/excludeRibo/",full.names = T),output = "heatmap/DEGheatmap_excludeRibo.pdf")
+
+
 
 ### pseudobulk heatmap
 pb_typeTreat = AverageExpression(mouse,group.by = c("cell_type_refine","treatment")) %>% as.data.frame
